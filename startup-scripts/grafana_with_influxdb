@@ -1,0 +1,62 @@
+#!/bin/bash
+# @sacloud-name "InfluxDB & Grafana"
+# @sacloud-once
+# @sacloud-desc InfluxDBおよびGrafanaのインストールを実行します。
+# @sacloud-desc このスクリプトは、CentOS 8.xでのみ動作します。
+# @sacloud-desc 完了後「http://IPアドレス:3000/」からGrafanaの管理コンソールへWebブラウザからアクセスできます。
+# @sacloud-require-archive distro-centos distro-ver-8.*
+
+_motd() {
+ LOG=$(ls /root/.sacloud-api/notes/*log)
+ case $1 in
+  start)
+   echo -e "\n#-- Startup-script is \\033[0;32mrunning\\033[0;39m. --#\n\nPlease check the log file: ${LOG}\n" > /etc/motd
+  ;;
+  fail)
+   echo -e "\n#-- Startup-script \\033[0;31mfailed\\033[0;39m. --#\n\nPlease check the log file: ${LOG}\n" > /etc/motd
+   exit 1
+  ;;
+  end)
+   cp -f /dev/null /etc/motd
+  ;;
+ esac
+}
+
+# ready for startup script
+_motd start
+set -e
+trap '_motd fail' ERR
+
+# yum update
+echo "# yum update"
+yum -y update
+
+# InfluxDBセットアップ
+echo "# influxDB 1.8.0 install"
+wget https://dl.influxdata.com/influxdb/releases/influxdb-1.8.0.x86_64.rpm
+yum -y install influxdb-1.8.0.x86_64.rpm
+
+# Grafanaセットアップ
+echo "# Grafana 7.0.3-1 install"
+wget https://dl.grafana.com/oss/release/grafana-7.0.3-1.x86_64.rpm
+yum -y install grafana-7.0.3-1.x86_64.rpm
+
+# ポート公開
+echo "# firewalld setting"
+firewall-cmd --add-port=8083/tcp --zone=public --permanent
+firewall-cmd --add-port=8086/tcp --zone=public --permanent
+firewall-cmd --add-port=8090/tcp --zone=public --permanent
+firewall-cmd --add-port=8099/tcp --zone=public --permanent
+firewall-cmd --add-port=3000/tcp --zone=public --permanent
+firewall-cmd --reload
+
+# 自動起動設定
+echo "# InfluxDB & Grafana setting"
+systemctl daemon-reload
+systemctl start influxd
+systemctl enable grafana-server
+systemctl start grafana-server
+
+_motd end
+
+exit 0
