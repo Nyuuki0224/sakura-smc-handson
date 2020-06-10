@@ -4,7 +4,14 @@
 # @sacloud-desc InfluxDBおよびGrafanaのインストールを実行します。
 # @sacloud-desc このスクリプトは、CentOS 8.xでのみ動作します。
 # @sacloud-desc 完了後「http://IPアドレス:3000/」からGrafanaの管理コンソールへWebブラウザからアクセスできます。
+# @sacloud-desc UIポート番号を指定した場合は、指定したポート番号でアクセスできます。
 # @sacloud-require-archive distro-centos distro-ver-8.*
+
+# @sacloud-text shellarg maxlen=5 ex=3000 integer min=80 max=65535 ui_port "Grafana管理コンソールのWeb UIポート番号"
+UI_PORT=@@@ui_port@@@
+if [[ "${UI_PORT}" == "" ]] ; then
+ UI_PORT="3000"
+fi
 
 _motd() {
  LOG=$(ls /root/.sacloud-api/notes/*log)
@@ -25,7 +32,7 @@ _motd() {
 # ready for startup script
 _motd start
 set -e
-trap '_motd fail' ERR
+trap "_motd fail" ERR
 
 # yum update
 echo "# yum update"
@@ -42,12 +49,19 @@ wget https://dl.grafana.com/oss/release/grafana-7.0.3-1.x86_64.rpm
 yum -y install grafana-7.0.3-1.x86_64.rpm
 
 # ポート公開
+if [ -n "${UI_PORT}" ]; then
+ # Grafana ポート変更
+ echo "# Grafana port changing"
+ sed -i -e "s/;http_port = 3000/http_port = ${UI_PORT}/g" /etc/grafana/grafana.ini
+ setcap "cap_net_bind_service=+ep" /usr/sbin/grafana-server
+fi
+
 echo "# firewalld setting"
 firewall-cmd --add-port=8083/tcp --zone=public --permanent
 firewall-cmd --add-port=8086/tcp --zone=public --permanent
 firewall-cmd --add-port=8090/tcp --zone=public --permanent
 firewall-cmd --add-port=8099/tcp --zone=public --permanent
-firewall-cmd --add-port=3000/tcp --zone=public --permanent
+firewall-cmd --add-port=$UI_PORT/tcp --permanent
 firewall-cmd --reload
 
 # 自動起動設定
